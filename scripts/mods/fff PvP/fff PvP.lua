@@ -7,12 +7,15 @@ local Stagger = mod:dofile("scripts/mods/pvp_mod/pvp_stagger")
 local Settings = mod:dofile("scripts/mods/pvp_mod/pvp_settings")
 local Tracker = mod:dofile("scripts/mods/pvp_mod/pvp_weapon_tracker")
 local Clash = mod:dofile("scripts/mods/pvp_mod/pvp_weapon_clash")
+local BotDrill = mod:dofile("scripts/mods/pvp_mod/pvp_bot_drill")
 
-Damage.hook(mod, Settings, Tracker, Clash)
+Damage.hook(mod, Settings, Tracker, Clash, Stagger)
 Stagger.hook(mod)
+BotDrill.hook(mod)
 mod.update = function()
 	Tracker.update(mod)
 	Stagger.update(mod)
+	BotDrill.update(mod)
 end
 
 local function broadcast_pvp_rules()
@@ -44,10 +47,14 @@ local function broadcast_pvp_rules()
 	end
 end
 
-mod:on_setting_changed(function(setting_id)
+-- VMF invokes this field directly after a setting is changed.  It is not a
+-- registration method, so calling it with ':' fails on current VMF builds.
+mod.on_setting_changed = function(setting_id)
 	if setting_id == "pvp_enabled" and mod:get(setting_id) == true then
 		broadcast_pvp_rules()
 	elseif setting_id == "pvp_damage" and mod:get("pvp_enabled") ~= false then
 		mod:echo(string.format("PVP Damage: %d%%", math.clamp(tonumber(mod:get(setting_id)) or 25, 1, 200)))
+	elseif setting_id == "pvp_bot_drill" then
+		mod:echo(mod:get(setting_id) == true and "PVP Bot 測試已啟用：" .. BotDrill.describe() or "PVP Bot 測試已關閉")
 	end
-end)
+end

@@ -7,4 +7,9 @@ return {
 			mod_localization = "scripts/mods/fff PvP/fff PvP_localization",
 		})
 	end,
+	-- Declare the package up front so VMF preloads it during mod setup.
+	-- Without this, loading the Lua modules below causes a blocking sync load.
+	packages = {
+		"resource_packages/fff PvP/fff PvP",
+	},
 }

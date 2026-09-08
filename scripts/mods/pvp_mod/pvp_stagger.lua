@@ -1,71 +1,90 @@
 local Stagger = {}
-local active_until = {}
 
 local function enabled(mod)
 	return mod:get("pvp_enabled") ~= false
 end
 
-local function install_templates()
-	if not rawget(_G, "PlayerUnitMovementSettings") then
+-- Current VT2 status extensions do not all expose get_in_ghost_mode(), while
+-- DamageUtils.stagger_player still calls it unconditionally. Preserve the
+-- native stagger-value write and network flag, but guard that optional API.
+local function write_native_stagger(unit, breed, stagger_direction, stagger_length, stagger_type, stagger_duration, stagger_animation_scale, t, stagger_value, always_stagger, is_push, should_play_push_sound)
+	local status = ScriptUnit.has_extension(unit, "status_system") and ScriptUnit.extension(unit, "status_system")
+	if not status or stagger_type <= 0 then
+		return
+	end
+	local breed_action = status:breed_action()
+	if breed_action and breed_action.stagger_prohibited then
+		return
+	end
+	if status.get_in_ghost_mode and status:get_in_ghost_mode() then
 		return
 	end
 
-	PlayerUnitMovementSettings.overpowered_templates = PlayerUnitMovementSettings.overpowered_templates or {}
-	PlayerUnitMovementSettings.overpowered_templates.pvp_parry_stagger = {}
-	PlayerUnitMovementSettings.overpowered_templates.pvp_push_stagger = {}
+	stagger_value = stagger_value or 1
+	stagger_animation_scale = stagger_animation_scale or 1
+	local difficulty_modifier = Managers.state.difficulty:get_difficulty_settings().stagger_modifier
+	local accumulated = status:accumulated_stagger()
+	local accumulated_clamped = math.clamp((accumulated or 0) + stagger_value, 0, 2)
+	accumulated = math.max(accumulated_clamped, accumulated or 0)
+	status:set_stagger_values(stagger_type, stagger_direction, stagger_length, accumulated, stagger_duration * difficulty_modifier, stagger_animation_scale, always_stagger, true)
+
+	if should_play_push_sound then
+		local sound_event = breed.push_sound_event or "Play_generic_pushed_impact_small"
+		Managers.state.entity:system("audio_system"):play_audio_unit_event(sound_event, unit)
+	end
 end
 
-install_templates()
-
-function Stagger.apply(unit, template, duration, attacker)
-	if not unit or not HEALTH_ALIVE[unit] or not Managers.player.is_server then
+-- Follow the native player stagger route used by AI pushes. stagger_player()
+-- writes status_extension:set_stagger_values(..., true), selecting the normal
+-- player stagger state and replicating it to every client.
+local function apply_native_push_stagger(target_unit, attacker_unit, minimum_duration)
+	if not target_unit or not attacker_unit or not HEALTH_ALIVE[target_unit] or not HEALTH_ALIVE[attacker_unit] then
+		return
+	end
+	if not Managers.player.is_server or not DamageUtils.is_player_unit(target_unit) then
 		return
 	end
 
-	local status = ScriptUnit.has_extension(unit, "status_system") and ScriptUnit.extension(unit, "status_system")
-	if not status then
+	local blackboard = BLACKBOARDS and BLACKBOARDS[target_unit]
+	local breed = blackboard and blackboard.breed
+	local profile = DamageProfileTemplates and DamageProfileTemplates.medium_push
+	if not breed or not profile then
 		return
 	end
 
-	-- Do not refresh an existing push/parry stagger. This prevents push spam
-	-- from extending the control duration indefinitely.
-	if status:is_overpowered() then
+	local power_level = 1
+	local career = ScriptUnit.has_extension(attacker_unit, "career_system") and ScriptUnit.extension(attacker_unit, "career_system")
+	if career then
+		power_level = career:get_career_power_level()
+	end
+
+	local stagger_type, stagger_duration, stagger_length, stagger_value = DamageUtils.calculate_stagger_player(ImpactTypeOutput, target_unit, attacker_unit, "torso", power_level, nil, false, profile, 1, false, "damage_push")
+	if not stagger_type or stagger_type <= 0 then
 		return
 	end
 
-	StatusUtils.set_overpowered_network(unit, true, template, attacker)
-	active_until[unit] = (Managers.time and Managers.time:time("game") or 0) + duration
+	local target_position = POSITION_LOOKUP[target_unit] or Unit.world_position(target_unit, 0)
+	local attacker_position = POSITION_LOOKUP[attacker_unit] or Unit.world_position(attacker_unit, 0)
+	local direction = Vector3.normalize(target_position - attacker_position)
+	write_native_stagger(target_unit, breed, direction, stagger_length, stagger_type, math.max(stagger_duration, minimum_duration or 0), 1, Managers.time:time("game"), stagger_value, true, true, true)
 end
 
 function Stagger.update(mod)
-	local now = Managers.time and Managers.time:time("game") or 0
-	for unit, end_time in pairs(active_until) do
-		if not enabled(mod) or not HEALTH_ALIVE[unit] or now >= end_time then
-			if HEALTH_ALIVE[unit] and Managers.player.is_server then
-				StatusUtils.set_overpowered_network(unit, false, nil, nil)
-			end
-			active_until[unit] = nil
-		end
-	end
+	-- Native player stagger owns its own expiry and cleanup.
 end
 
 function Stagger.clear(unit)
-	if not active_until[unit] or not HEALTH_ALIVE[unit] or not Managers.player.is_server then
-		return
-	end
-
-	StatusUtils.set_overpowered_network(unit, false, nil, nil)
-	active_until[unit] = nil
+	-- Compatibility no-op for the damage hook. Native stagger must finish via
+	-- the status extension, rather than manual overpowered-state cleanup.
 end
 
 function Stagger.hook(mod)
 	if rawget(_G, "DamageUtils") then
-		mod:hook(DamageUtils, "server_apply_hit", function(func, t, attacker_unit, target_unit, hit_zone_name, hit_position, attack_direction, hit_ragdoll_actor, damage_source, power_level, damage_profile, target_index, boost_curve_multiplier, is_critical_strike, can_damage, can_stagger, blocking, shield_breaking_hit, backstab_multiplier, first_hit, total_hits, source_attacker_unit, optional_predicted_damage)
-			local result = {func(t, attacker_unit, target_unit, hit_zone_name, hit_position, attack_direction, hit_ragdoll_actor, damage_source, power_level, damage_profile, target_index, boost_curve_multiplier, is_critical_strike, can_damage, can_stagger, blocking, shield_breaking_hit, backstab_multiplier, first_hit, total_hits, source_attacker_unit, optional_predicted_damage)}
-			if enabled(mod) and can_damage and not blocking and target_unit and active_until[target_unit] then
-				Stagger.clear(target_unit)
+		mod:hook(DamageUtils, "stagger_player", function(func, unit, breed, stagger_direction, stagger_length, stagger_type, stagger_duration, stagger_animation_scale, t, stagger_value, always_stagger, is_push, should_play_push_sound)
+			if not enabled(mod) or not DamageUtils.is_player_unit(unit) then
+				return func(unit, breed, stagger_direction, stagger_length, stagger_type, stagger_duration, stagger_animation_scale, t, stagger_value, always_stagger, is_push, should_play_push_sound)
 			end
-			return unpack(result)
+			return write_native_stagger(unit, breed, stagger_direction, stagger_length, stagger_type, stagger_duration, stagger_animation_scale, t, stagger_value, always_stagger, is_push, should_play_push_sound)
 		end)
 	end
 
@@ -74,11 +93,11 @@ function Stagger.hook(mod)
 			if not enabled(mod) then
 				return func(self, fatigue_type, attacking_unit, fatigue_multiplier, improved_block, attack_direction)
 			end
-			local t = Managers.time and Managers.time:time("game") or 0
-			local was_timed_block = self.timed_block and t < self.timed_block
-			local result = {func(self, fatigue_type, attacking_unit, fatigue_multiplier, improved_block, attack_direction)}
-			if was_timed_block and rawget(_G, "DamageUtils") and attacking_unit and DamageUtils.is_player_unit(attacking_unit) and self.unit then
-				Stagger.apply(attacking_unit, "slow_bomb", 3, self.unit)
+			local now = Managers.time:time("game")
+			local was_timed_block = self.timed_block and now < self.timed_block
+			local result = { func(self, fatigue_type, attacking_unit, fatigue_multiplier, improved_block, attack_direction) }
+			if was_timed_block and attacking_unit and DamageUtils.is_player_unit(attacking_unit) and self.unit then
+				apply_native_push_stagger(attacking_unit, self.unit, 3)
 			end
 			return unpack(result)
 		end)
@@ -91,23 +110,20 @@ function Stagger.hook(mod)
 			end
 			local side = Managers.state and Managers.state.side
 			local owner = self.owner_unit
-			local lookup = side and side.enemy_units_lookup
+			local own_side = side and side.side_by_unit[owner]
+			local lookup = own_side and own_side.enemy_units_lookup
 			local added = {}
-			if lookup and side.side_by_unit[owner] then
-				local own_side = side.side_by_unit[owner]
+			if lookup then
 				for _, unit in pairs(own_side.PLAYER_AND_BOT_UNITS or {}) do
-					if unit ~= owner and not lookup[unit] and HEALTH_ALIVE[unit] then
+					if unit ~= owner and HEALTH_ALIVE[unit] and not lookup[unit] then
 						lookup[unit] = true
 						added[#added + 1] = unit
 					end
 				end
 			end
-			local result = {func(self, dt, t, world, can_damage)}
-			for i = 1, #added do lookup[added[i]] = nil end
-			for unit in pairs(self.push_units or {}) do
-				if DamageUtils.is_player_unit(unit) then
-					Stagger.apply(unit, "slow_bomb", 1, owner)
-				end
+			local result = { func(self, dt, t, world, can_damage) }
+			for i = 1, #added do
+				lookup[added[i]] = nil
 			end
 			return unpack(result)
 		end)
