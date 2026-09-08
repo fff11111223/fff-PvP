@@ -7,5 +7,6 @@ package = [
 ]
 
 lua = [
-	"scripts/mods/fff PvP/*"
+	"scripts/mods/fff PvP/*",
+	"scripts/mods/pvp_mod/*"
 ]
