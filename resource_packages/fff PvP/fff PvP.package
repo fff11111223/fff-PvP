@@ -1,0 +1,11 @@
+mod = [
+	"fff PvP"
+]
+
+package = [
+	"resource_packages/fff PvP/fff PvP"
+]
+
+lua = [
+	"scripts/mods/fff PvP/*"
+]
