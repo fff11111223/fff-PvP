@@ -5,10 +5,13 @@ local mod = get_mod("fff PvP")
 local Damage = mod:dofile("scripts/mods/pvp_mod/pvp_damage")
 local Stagger = mod:dofile("scripts/mods/pvp_mod/pvp_stagger")
 local Settings = mod:dofile("scripts/mods/pvp_mod/pvp_settings")
+local Tracker = mod:dofile("scripts/mods/pvp_mod/pvp_weapon_tracker")
+local Clash = mod:dofile("scripts/mods/pvp_mod/pvp_weapon_clash")
 
-Damage.hook(mod, Settings)
+Damage.hook(mod, Settings, Tracker, Clash)
 Stagger.hook(mod)
 mod.update = function()
+	Tracker.update(mod)
 	Stagger.update(mod)
 end
 
