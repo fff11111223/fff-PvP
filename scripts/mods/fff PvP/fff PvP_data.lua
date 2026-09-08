@@ -7,6 +7,13 @@ return {
 	options = {
 		widgets = {
 			{
+				setting_id = "pvp_enabled",
+				type = "checkbox",
+				text = "PVP Enabled",
+				tooltip = "啟用 PVP 規則；關閉時完全使用原本遊戲規則",
+				default_value = true,
+			},
+			{
 				setting_id = "pvp_damage",
 				type = "numeric",
 				text = "PVP Damage (%)",

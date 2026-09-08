@@ -1,6 +1,10 @@
 local Stagger = {}
 local active_until = {}
 
+local function enabled(mod)
+	return mod:get("pvp_enabled") ~= false
+end
+
 local function install_templates()
 	if not rawget(_G, "PlayerUnitMovementSettings") then
 		return
@@ -33,10 +37,10 @@ function Stagger.apply(unit, template, duration, attacker)
 	active_until[unit] = (Managers.time and Managers.time:time("game") or 0) + duration
 end
 
-function Stagger.update()
+function Stagger.update(mod)
 	local now = Managers.time and Managers.time:time("game") or 0
 	for unit, end_time in pairs(active_until) do
-		if not HEALTH_ALIVE[unit] or now >= end_time then
+		if not enabled(mod) or not HEALTH_ALIVE[unit] or now >= end_time then
 			if HEALTH_ALIVE[unit] and Managers.player.is_server then
 				StatusUtils.set_overpowered_network(unit, false, nil, nil)
 			end
@@ -58,7 +62,7 @@ function Stagger.hook(mod)
 	if rawget(_G, "DamageUtils") then
 		mod:hook(DamageUtils, "server_apply_hit", function(func, t, attacker_unit, target_unit, hit_zone_name, hit_position, attack_direction, hit_ragdoll_actor, damage_source, power_level, damage_profile, target_index, boost_curve_multiplier, is_critical_strike, can_damage, can_stagger, blocking, shield_breaking_hit, backstab_multiplier, first_hit, total_hits, source_attacker_unit, optional_predicted_damage)
 			local result = {func(t, attacker_unit, target_unit, hit_zone_name, hit_position, attack_direction, hit_ragdoll_actor, damage_source, power_level, damage_profile, target_index, boost_curve_multiplier, is_critical_strike, can_damage, can_stagger, blocking, shield_breaking_hit, backstab_multiplier, first_hit, total_hits, source_attacker_unit, optional_predicted_damage)}
-			if can_damage and not blocking and target_unit and active_until[target_unit] then
+			if enabled(mod) and can_damage and not blocking and target_unit and active_until[target_unit] then
 				Stagger.clear(target_unit)
 			end
 			return unpack(result)
@@ -67,6 +71,9 @@ function Stagger.hook(mod)
 
 	if rawget(_G, "GenericStatusExtension") then
 		mod:hook(GenericStatusExtension, "blocked_attack", function(func, self, fatigue_type, attacking_unit, fatigue_multiplier, improved_block, attack_direction)
+			if not enabled(mod) then
+				return func(self, fatigue_type, attacking_unit, fatigue_multiplier, improved_block, attack_direction)
+			end
 			local t = Managers.time and Managers.time:time("game") or 0
 			local was_timed_block = self.timed_block and t < self.timed_block
 			local result = {func(self, fatigue_type, attacking_unit, fatigue_multiplier, improved_block, attack_direction)}
@@ -79,6 +86,9 @@ function Stagger.hook(mod)
 
 	if rawget(_G, "ActionPushStagger") then
 		mod:hook(ActionPushStagger, "client_owner_post_update", function(func, self, dt, t, world, can_damage)
+			if not enabled(mod) then
+				return func(self, dt, t, world, can_damage)
+			end
 			local side = Managers.state and Managers.state.side
 			local owner = self.owner_unit
 			local lookup = side and side.enemy_units_lookup
