@@ -97,7 +97,16 @@ function Clash.check(tracker, attacker_unit, target_unit, damage_profile)
 	end
 	local attacker_class = class_from_profile(damage_profile)
 	local target_class = current_attack_class(target_unit)
-	if not attacker_class or not target_class or not weapon_class(attacker_unit) or not weapon_class(target_unit) then
+	if not attacker_class or not weapon_class(attacker_unit) or not weapon_class(target_unit) then
+		return { available = false, reason = "target_attack_state_unavailable" }
+	end
+	-- PvP light attacks are deliberately clash attacks whenever they hit a
+	-- Hero Player.  This is evaluated only after the native sweep has produced
+	-- the actual player hit; it does not create a per-frame collision test.
+	if attacker_class == "light" then
+		return { available = true, clash = true, attacker_blocked = true, target_blocked = target_class == "light" }
+	end
+	if not target_class then
 		return { available = false, reason = "target_attack_state_unavailable" }
 	end
 	local a = tracker.pose(attacker_unit)

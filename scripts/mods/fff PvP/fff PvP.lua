@@ -3,18 +3,15 @@ local mod = get_mod("fff PvP")
 -- Keep the project entry point in the native build-detected folder.
 -- The implementation modules are loaded from the same package below.
 local Damage = mod:dofile("scripts/mods/pvp_mod/pvp_damage")
-local Stagger = mod:dofile("scripts/mods/pvp_mod/pvp_stagger")
 local Settings = mod:dofile("scripts/mods/pvp_mod/pvp_settings")
 local Tracker = mod:dofile("scripts/mods/pvp_mod/pvp_weapon_tracker")
 local Clash = mod:dofile("scripts/mods/pvp_mod/pvp_weapon_clash")
 local BotDrill = mod:dofile("scripts/mods/pvp_mod/pvp_bot_drill")
 
-Damage.hook(mod, Settings, Tracker, Clash, Stagger)
-Stagger.hook(mod)
+Damage.hook(mod, Settings, Tracker, Clash)
 BotDrill.hook(mod)
 mod.update = function()
 	Tracker.update(mod)
-	Stagger.update(mod)
 	BotDrill.update(mod)
 end
 
@@ -26,9 +23,9 @@ local function broadcast_pvp_rules()
 		"[PVP] 輕擊格擋：1 體力",
 		"[PVP] 單手重擊格擋：4 體力",
 		"[PVP] 雙手重擊格擋：16 體力",
-		"[PVP] 完美格擋：攻擊者踉蹌 3 秒",
-		"[PVP] 推擊：受擊者踉蹌 1 秒",
-		"[PVP] 踉蹌期間受到有效攻擊會立即解除",
+		"[PVP] 普通攻擊：ATK / BLOCK / PARRY 使用原生流程",
+		"[PVP] 滿蓄 Heavy：穿透玩家 Block / Parry",
+		"[PVP] Push：完全使用原生流程",
 		"[PVP] 武器碰撞：輕輕 / 重重互撞；輕重碰撞時重擊繼續",
 	}
 
