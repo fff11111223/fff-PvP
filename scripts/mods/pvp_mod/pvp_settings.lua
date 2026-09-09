@@ -5,7 +5,7 @@ local settings = {
 
 	get_damage_multiplier = function(mod)
 		local value = mod:get("pvp_damage") or 25
-		return math.clamp(tonumber(value) or 25, 1, 200) / 100
+		return math.clamp(tonumber(value) or 25, 1, 2000) / 100
 	end,
 }
 

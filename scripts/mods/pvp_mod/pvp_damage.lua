@@ -100,10 +100,18 @@ function Damage.hook(mod, settings, tracker, clash, stagger)
 			if stagger and damage_profile and damage_profile.is_push and target_unit and attacker_unit and not blocking then
 				stagger.apply_push(target_unit, attacker_unit)
 			end
-			if stagger and can_damage and not blocking and target_unit then
+			return unpack(result)
+		end)
+
+		-- DamageUtils.add_damage_network_player returns the final applied amount.
+		-- Use that value for the PvP-stagger interrupt so blocks, zero-damage hits,
+		-- and clash-suppressed attacks cannot clear the native player state.
+		mod:hook(DamageUtils, "add_damage_network_player", function(func, damage_profile, target_index, power_level, target_unit, attacker_unit, hit_zone_name, hit_position, attack_direction, damage_source, hit_ragdoll_actor, boost_curve_multiplier, is_critical_strike, added_dot, first_hit, total_hits, backstab_multiplier, source_attacker_unit)
+			local result = func(damage_profile, target_index, power_level, target_unit, attacker_unit, hit_zone_name, hit_position, attack_direction, damage_source, hit_ragdoll_actor, boost_curve_multiplier, is_critical_strike, added_dot, first_hit, total_hits, backstab_multiplier, source_attacker_unit)
+			if stagger and result and result > 0 and target_unit and attacker_unit and DamageUtils.is_player_unit(attacker_unit) and DamageUtils.is_player_unit(target_unit) then
 				stagger.clear(target_unit)
 			end
-			return unpack(result)
+			return result
 		end)
 
 		mod:hook(DamageUtils, "calculate_damage", function(func, damage_output, target_unit, attacker_unit, hit_zone_name, original_power_level, boost_curve, boost_damage_multiplier, is_critical_strike, damage_profile, target_index, backstab_multiplier, damage_source)
