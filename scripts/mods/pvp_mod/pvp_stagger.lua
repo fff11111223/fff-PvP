@@ -1,4 +1,5 @@
 local Stagger = {}
+local push_stagger_until = setmetatable({}, { __mode = "k" })
 
 local function enabled(mod)
 	return mod:get("pvp_enabled") ~= false
@@ -67,6 +68,32 @@ local function apply_native_push_stagger(target_unit, attacker_unit, minimum_dur
 	local attacker_position = POSITION_LOOKUP[attacker_unit] or Unit.world_position(attacker_unit, 0)
 	local direction = Vector3.normalize(target_position - attacker_position)
 	write_native_stagger(target_unit, breed, direction, stagger_length, stagger_type, math.max(stagger_duration, minimum_duration or 0), 1, Managers.time:time("game"), stagger_value, true, true, true)
+end
+
+local function player_is_attacking(unit)
+	local inventory = unit and ScriptUnit.has_extension(unit, "inventory_system") and ScriptUnit.extension(unit, "inventory_system")
+	local weapon_unit = inventory and (inventory.get_weapon_unit and inventory:get_weapon_unit() or inventory.get_weapon_unit_3p and inventory:get_weapon_unit_3p())
+	local weapon_extension = weapon_unit and ScriptUnit.has_extension(weapon_unit, "weapon_system") and ScriptUnit.extension(weapon_unit, "weapon_system")
+	local action = weapon_extension and weapon_extension.get_current_action_settings and weapon_extension:get_current_action_settings()
+
+	return action and (action.kind == "sweep" or action.kind == "melee_start") or false
+end
+
+function Stagger.apply_push(target_unit, attacker_unit)
+	if not target_unit or not attacker_unit or not DamageUtils.is_player_unit(target_unit) or not DamageUtils.is_player_unit(attacker_unit) then
+		return
+	end
+	if player_is_attacking(target_unit) then
+		return
+	end
+
+	local now = Managers.time:time("game")
+	if push_stagger_until[target_unit] and now < push_stagger_until[target_unit] then
+		return
+	end
+
+	push_stagger_until[target_unit] = now + 1
+	apply_native_push_stagger(target_unit, attacker_unit, 1)
 end
 
 function Stagger.update(mod)

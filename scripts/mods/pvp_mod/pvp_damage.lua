@@ -64,9 +64,24 @@ function Damage.hook(mod, settings, tracker, clash, stagger)
 				-- Let the native checker decide the arc and consume fatigue. Its
 				-- return value is also the authoritative blocking result.
 				blocking = DamageUtils.check_block(attacker_unit, hit_unit, block_fatigue_type(attacker_unit, damage_profile, clash))
+				self._pvp_blocked_hit = blocking
 			end
 			local result = {func(self, is_server, attacker_unit, hit_unit, breed, hit_position, hit_zone_name, current_action, damage_profile, target_index, power_level, attack_direction, blocking, boost_curve_multiplier, is_critical_strike, backstab_multiplier)}
 			return unpack(result)
+		end)
+
+		-- Feed the authoritative PVP block result into ActionSweep's native
+		-- attacker hit-stop/abort animation path.
+		mod:hook(ActionSweep, "_play_hit_animations", function(func, self, owner_unit, current_action, abort_attack, hit_zone_name, armor_type, blocking, killed_unit)
+			if not settings.is_enabled(mod) then
+				self._pvp_blocked_hit = nil
+				return func(self, owner_unit, current_action, abort_attack, hit_zone_name, armor_type, blocking, killed_unit)
+			end
+			if self._pvp_blocked_hit then
+				blocking = true
+				self._pvp_blocked_hit = nil
+			end
+			return func(self, owner_unit, current_action, abort_attack, hit_zone_name, armor_type, blocking, killed_unit)
 		end)
 	end
 
@@ -82,6 +97,9 @@ function Damage.hook(mod, settings, tracker, clash, stagger)
 				can_damage = false
 			end
 			local result = { func(t, attacker_unit, target_unit, hit_zone_name, hit_position, attack_direction, hit_ragdoll_actor, damage_source, power_level, damage_profile, target_index, boost_curve_multiplier, is_critical_strike, can_damage, can_stagger, blocking, shield_breaking_hit, backstab_multiplier, first_hit, total_hits, source_attacker_unit, optional_predicted_damage) }
+			if stagger and damage_profile and damage_profile.is_push and target_unit and attacker_unit and not blocking then
+				stagger.apply_push(target_unit, attacker_unit)
+			end
 			if stagger and can_damage and not blocking and target_unit then
 				stagger.clear(target_unit)
 			end
