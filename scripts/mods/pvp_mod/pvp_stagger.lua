@@ -23,10 +23,10 @@ local function write_native_stagger(unit, breed, stagger_direction, stagger_leng
 	stagger_value = stagger_value or 1
 	stagger_animation_scale = stagger_animation_scale or 1
 	local difficulty_modifier = Managers.state.difficulty:get_difficulty_settings().stagger_modifier
-	local accumulated = status:accumulated_stagger()
-	local accumulated_clamped = math.clamp((accumulated or 0) + stagger_value, 0, 2)
-	accumulated = math.max(accumulated_clamped, accumulated or 0)
-	status:set_stagger_values(stagger_type, stagger_direction, stagger_length, accumulated, stagger_duration * difficulty_modifier, stagger_animation_scale, always_stagger, true)
+	-- Player status does not expose the AI-only accumulated stagger state.
+	-- Pass the value calculated for this hit directly through the native player
+	-- stagger setter; do not create an AI-style counter for PvP players.
+	status:set_stagger_values(stagger_type, stagger_direction, stagger_length, stagger_value, stagger_duration * difficulty_modifier, stagger_animation_scale, always_stagger, true)
 
 	if should_play_push_sound then
 		local sound_event = breed.push_sound_event or "Play_generic_pushed_impact_small"
