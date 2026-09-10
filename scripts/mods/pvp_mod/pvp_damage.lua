@@ -56,6 +56,7 @@ function Damage.hook(mod, settings, tracker, clash)
 		mod:hook(WeaponUnitExtension, "start_action", function(func, self, action_name, sub_action_name, actions, t, power_level, action_init_data)
 			if not settings.is_enabled(mod) then
 				self._pvp_full_heavy = false
+				self._pvp_attack_class = nil
 				return func(self, action_name, sub_action_name, actions, t, power_level, action_init_data)
 			end
 			local previous = self.current_action_settings
@@ -78,6 +79,7 @@ function Damage.hook(mod, settings, tracker, clash)
 			local result = {func(self, action_name, sub_action_name, actions, t, power_level, action_init_data)}
 			local current = self.current_action_settings
 			self._pvp_full_heavy = reached_heavy_release and current and current.charge_value == "heavy_attack" or false
+			self._pvp_attack_class = current and current.charge_value or nil
 			return unpack(result)
 		end)
 	end
@@ -157,6 +159,10 @@ function Damage.hook(mod, settings, tracker, clash)
 			end
 			if self._pvp_blocked_hit then
 				blocking = true
+				-- Native ActionSweep only selects the shield-stop animation when
+				-- abort_attack is already true.  PVP clash must stop the current
+				-- attack as well as show the impact marker.
+				abort_attack = true
 				self._pvp_blocked_hit = nil
 			end
 			return func(self, owner_unit, current_action, abort_attack, hit_zone_name, armor_type, blocking, killed_unit)

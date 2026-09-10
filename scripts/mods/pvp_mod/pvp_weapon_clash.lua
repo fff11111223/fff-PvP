@@ -64,6 +64,12 @@ local function current_attack_class(unit)
 	local inventory = unit and ScriptUnit.has_extension(unit, "inventory_system") and ScriptUnit.extension(unit, "inventory_system")
 	local weapon = inventory and (inventory:get_weapon_unit() or inventory:get_weapon_unit_3p())
 	local extension = weapon and ScriptUnit.has_extension(weapon, "weapon_system") and ScriptUnit.extension(weapon, "weapon_system")
+	local tracked = extension and extension._pvp_attack_class
+	if tracked == "light_attack" then
+		return "light"
+	elseif tracked == "heavy_attack" then
+		return "heavy"
+	end
 	local action = extension and extension.get_current_action_settings and extension:get_current_action_settings()
 	local profile_name = action and (action.damage_profile or action.damage_profile_inner or action.damage_profile_outer)
 	local profile = type(profile_name) == "table" and profile_name or profile_name and DamageProfileTemplates[profile_name]
